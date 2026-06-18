@@ -7,13 +7,13 @@ from pydantic import BaseModel
 
 import typer
 
-from stab_fm.cli import *
+from stab_fm.cli import fm
 
 app = typer.Typer(no_args_is_help=True)
 
 
 class RefImg(BaseModel):
-    fn: Path
+    fname: Path
     f_rois: Path
 
 class TargetImgs(BaseModel):
@@ -43,7 +43,7 @@ def main(
     # load configuration file
     conf = load_config(input_yaml)
 
-    if not conf.ref_img.fn.exists():
+    if not conf.ref_img.fname.exists():
         raise typer.Exit("Reference image does not exist")
 
     if not conf.outdir.exists():
@@ -51,7 +51,8 @@ def main(
 
     try:
         # Run feature matching
-        print('')
+        fm.main(conf)
+
         # Compute and apply stabilization transform
 
 
