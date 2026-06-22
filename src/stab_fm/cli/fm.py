@@ -7,5 +7,6 @@ def main(conf):
         conf.ref_img.f_rois,
         conf.target_imgs.dir,
         conf.f_calib,
+        conf.matching,
         conf.outdir
     )

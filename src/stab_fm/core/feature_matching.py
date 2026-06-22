@@ -30,7 +30,7 @@ def set_matcher(type_matching):
         index_params = dict(algorithm=1, trees=5)  # FLANN_INDEX_KDTREE = 1
         search_params = dict(checks=100)
         matcher = cv2.FlannBasedMatcher(index_params, search_params)
-    elif type_matching == 'bf':
+    elif type_matching == 'bfmatcher':
         matcher = cv2.BFMatcher()
     return matcher
 
@@ -40,7 +40,7 @@ def get_matching_pts(matcher, des_ref, des):
     return raw_matches
 
 
-def feature_based_img_alignment(ref_fn, ref_f_rois, target_imgs_dir, f_calib, outdir, ecc=False):
+def feature_based_img_alignment(ref_fn, ref_f_rois, target_imgs_dir, f_calib, type_matching, outdir, ecc=False):
 
     # read reference image
     im_ref, im_ref_gray, h, w = img.read(ref_fn, f_calib)
@@ -53,7 +53,7 @@ def feature_based_img_alignment(ref_fn, ref_f_rois, target_imgs_dir, f_calib, ou
     sift = cv2.SIFT_create()
 
     # matcher
-    matcher = set_matcher('bf')
+    matcher = set_matcher(type_matching) # type_matching = 'flann' or 'bf'
 
     # compute keypoints and descriptors on ref img
     kps_ref = []
@@ -69,7 +69,8 @@ def feature_based_img_alignment(ref_fn, ref_f_rois, target_imgs_dir, f_calib, ou
     masks_target = [cv2.dilate(masks[i], kernel, iterations=1) for i in range(len(masks))]
 
     # outdirs
-    outdir_matches = outdir / 'matches'
+    outdir = outdir / type_matching
+    outdir_matches = outdir /  'matches'
     outdir_matches.mkdir(parents=True, exist_ok=True)
     outdir_matches_plots = outdir_matches / 'plots'
     outdir_matches_plots.mkdir(parents=True, exist_ok=True)
@@ -107,8 +108,8 @@ def feature_based_img_alignment(ref_fn, ref_f_rois, target_imgs_dir, f_calib, ou
         # compute homography and inliers
         H, inlier_mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5)
 
-        # plot source and destination matches
-        # plot_src_and_dst_matches_mpl(src_pts, dst_pts, inlier_mask, im_ref, im, outdir_matches_plots, f.name)
+        # plot source and destination matches (with matplotlib, and bokeh)
+        plot_src_and_dst_matches_mpl(src_pts, dst_pts, inlier_mask, im_ref, im, outdir_matches_plots, f.name)
         plot_src_and_dst_matches(src_pts, dst_pts, inlier_mask, im_ref, im, outdir_matches_plots, f.stem, h, w)
 
         if ecc:
@@ -129,7 +130,7 @@ def feature_based_img_alignment(ref_fn, ref_f_rois, target_imgs_dir, f_calib, ou
                 cc, refined_H = cv2.findTransformECCWithMask(im_ref_gray, im_gray, mask_ref, mask, warp_matrix, warp_mode, criteria)
                 # apply homography to target image
                 im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
-                warped_img = cv2.warpPerspective(im, refined_H, (h, w), flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
+                warped_img = cv2.warpPerspective(im, refined_H, (w, h), flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
                 # save warped image
                 cv2.imwrite(outdir_warped / f.name, warped_img)
             except:
@@ -137,7 +138,7 @@ def feature_based_img_alignment(ref_fn, ref_f_rois, target_imgs_dir, f_calib, ou
         else:
             # apply homography to target image
             im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
-            warped_img = cv2.warpPerspective(im, H, (h, w))
+            warped_img = cv2.warpPerspective(im, H, (w, h))
             # save warped image
             cv2.imwrite(outdir_warped / f.name, warped_img)
 
