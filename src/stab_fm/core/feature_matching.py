@@ -2,6 +2,9 @@ from roi_editor.core import roi
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+from bokeh.plotting import figure, save, output_file
+from bokeh.models import Range1d
+from bokeh.layouts import row
 
 from stab_fm.core import img
 
@@ -21,17 +24,38 @@ def masks_from_rois(f_roi, im_shape):
     return masks, mask
 
 
-def recover_matching_keypoints(ref_fn, ref_f_rois, target_imgs_dir, outdir, ecc=False):
+def set_matcher(type_matching):
+    if type_matching == 'flann':
+        # Match with FLANN (faster than BFMatcher at scale)
+        index_params = dict(algorithm=1, trees=5)  # FLANN_INDEX_KDTREE = 1
+        search_params = dict(checks=100)
+        matcher = cv2.FlannBasedMatcher(index_params, search_params)
+    elif type_matching == 'bf':
+        matcher = cv2.BFMatcher()
+    return matcher
+
+
+def get_matching_pts(matcher, des_ref, des):
+    raw_matches = matcher.knnMatch(des_ref, des, k=2)
+    return raw_matches
+
+
+def feature_based_img_alignment(ref_fn, ref_f_rois, target_imgs_dir, f_calib, outdir, ecc=False):
 
     # read reference image
-    im_ref, im_ref_gray, w, h = img.read(ref_fn)
+    im_ref, im_ref_gray, h, w = img.read(ref_fn, f_calib)
 
     # get masks from rois that were defined on ref image
-    masks, mask_ref = masks_from_rois(ref_f_rois, (w, h))
+    masks, mask_ref = masks_from_rois(ref_f_rois, (h, w))
+
+    # Create a SIFT object (is an algorithm used to detect and describe local features in images.
+    # SIFT is robust to changes in scale, rotation, and illumination)
+    sift = cv2.SIFT_create()
+
+    # matcher
+    matcher = set_matcher('bf')
 
     # compute keypoints and descriptors on ref img
-    sift = cv2.SIFT_create()
-    bf = cv2.BFMatcher()
     kps_ref = []
     des_ref = []
     for i in range(len(masks)):
@@ -62,14 +86,14 @@ def recover_matching_keypoints(ref_fn, ref_f_rois, target_imgs_dir, outdir, ecc=
         src_pts = []
 
         # read target image
-        im, im_gray, _, _ = img.read(f)
+        im, im_gray, _, _ = img.read(f, f_calib)
 
         # loop through masks applied on target img
         for i in range(len(masks)):
             # compute keypoints and descriptors on target img
             kp, des = sift.detectAndCompute(im_gray, masks_target[i])
             # get matching keypoints
-            raw_matches = bf.knnMatch(des_ref[i], des, k=2)
+            raw_matches = get_matching_pts(matcher, des_ref[i], des)
             # filter matching keypoints by a distance criteria
             good = [m for m, n in raw_matches if m.distance < 0.75 * n.distance]
             # append src and dst pts
@@ -84,7 +108,8 @@ def recover_matching_keypoints(ref_fn, ref_f_rois, target_imgs_dir, outdir, ecc=
         H, inlier_mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5)
 
         # plot source and destination matches
-        plot_src_and_dst_matches(src_pts, dst_pts, inlier_mask, im_ref, im, outdir_matches_plots, f.name)
+        # plot_src_and_dst_matches_mpl(src_pts, dst_pts, inlier_mask, im_ref, im, outdir_matches_plots, f.name)
+        plot_src_and_dst_matches(src_pts, dst_pts, inlier_mask, im_ref, im, outdir_matches_plots, f.stem, h, w)
 
         if ecc:
             # ECC
@@ -119,7 +144,7 @@ def recover_matching_keypoints(ref_fn, ref_f_rois, target_imgs_dir, outdir, ecc=
     return
 
 
-def plot_src_and_dst_matches(src_pts, dst_pts, inlier_mask, im_ref, im, outdir_matches_plots, name):
+def plot_src_and_dst_matches_mpl(src_pts, dst_pts, inlier_mask, im_ref, im, outdir_matches_plots, name):
     dst_pts = np.squeeze(dst_pts)
     src_pts = np.squeeze(src_pts)
     inlier_mask = np.squeeze(inlier_mask)
@@ -131,4 +156,52 @@ def plot_src_and_dst_matches(src_pts, dst_pts, inlier_mask, im_ref, im, outdir_m
     ax[1].plot(src_pts[:, 0], src_pts[:, 1], c='r', linewidth=0, markersize=6, marker='d')
     ax[1].plot(src_pts[inlier_inds, 0], src_pts[inlier_inds, 1], c='b', linewidth=0, markersize=6, marker='d')
     fig.savefig(outdir_matches_plots / name)
+
+
+def plot_src_and_dst_matches(src_pts, dst_pts, inlier_mask, im_ref, im, outdir_matches_plots, name, h, w):
+
+    # convert images to rgba
+    im_ref = img.to_rgba(im_ref, h, w)
+    im = img.to_rgba(im, h, w)
+
+    dst_pts = np.squeeze(dst_pts)
+    src_pts = np.squeeze(src_pts)
+    inlier_mask = np.squeeze(inlier_mask)
+    inlier_inds = np.where(inlier_mask == 1)
+
+    # Bokeh  expects image origin at bottom-left, so flip vertically
+    im_ref = np.flipud(im_ref)
+    im = np.flipud(im)
+
+    # Flip y-coordinates to match Bokeh's bottom-left origin
+    dst_pts[:, 1] = h - dst_pts[:, 1]
+    src_pts[:, 1] = h - src_pts[:, 1]
+
+    # Range1d objects to share the same ranges between p1 and p2
+    x_range = Range1d(0, w)
+    y_range = Range1d(0, h)
+
+    # plot ref img keypoints
+    p1 = figure(width=900, height=550, title="Reference image (dst_pts)", x_range=x_range, y_range=y_range)
+    p1.image_rgba(image=[im_ref], x=0, y=0, dw=w, dh=h)
+    p1.scatter(dst_pts[:, 0], dst_pts[:, 1], color="green", size=6, marker="square")
+
+    # plot moving img keypoints
+    p2 = figure(width=900, height=550, title="Current image (src_pts)", x_range=x_range, y_range=y_range)
+    p2.image_rgba(image=[im], x=0, y=0, dw=w, dh=h)
+
+    # Outliers in red
+    outlier_inds = np.where(inlier_mask == 0)
+    p2.scatter(src_pts[outlier_inds, 0].ravel(), src_pts[outlier_inds, 1].ravel(),
+               color="red", size=6, marker="diamond")
+    # Inliers in blue
+    p2.scatter(src_pts[inlier_inds, 0].ravel(), src_pts[inlier_inds, 1].ravel(),
+               color="blue", size=6, marker="diamond")
+
+    layout = row(p1, p2)
+    name = name + '.html'
+    output_file(outdir_matches_plots / name)
+    save(layout)
+
+
 

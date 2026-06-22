@@ -23,6 +23,7 @@ class AppConfig(BaseModel):
     ref_img: RefImg
     target_imgs: TargetImgs
     outdir: Path
+    f_calib: Path
 
 def load_config(path: str) -> AppConfig:
     with open(path, "r", encoding="utf-8") as f:
