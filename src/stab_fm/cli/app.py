@@ -25,6 +25,7 @@ class AppConfig(BaseModel):
     outdir: Path
     f_calib: Path
     matching: str
+    compute_fm: bool
 
 def load_config(path: str) -> AppConfig:
     with open(path, "r", encoding="utf-8") as f:
@@ -53,9 +54,13 @@ def main(
 
     try:
         # Run feature matching
-        fm.main(conf)
+        if conf.compute_fm:
+            fm.main(conf)
 
-        # Compute and apply stabilization transform
+        # Compute accuracy metrics
+
+
+        # apply stabilization transform
 
 
 
