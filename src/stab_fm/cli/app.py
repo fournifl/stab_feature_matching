@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 import typer
 
-from stab_fm.cli import fm
+from stab_fm.cli import fm, accuracy
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -26,6 +26,7 @@ class AppConfig(BaseModel):
     f_calib: Path
     matching: str
     compute_fm: bool
+    plot_fm: bool
 
 def load_config(path: str) -> AppConfig:
     with open(path, "r", encoding="utf-8") as f:
@@ -49,19 +50,19 @@ def main(
     if not conf.ref_img.fname.exists():
         raise typer.Exit("Reference image does not exist")
 
-    if not conf.outdir.exists():
-        conf.outdir.mkdir(parents=True, exist_ok=True)
-
     try:
         # Run feature matching
         if conf.compute_fm:
             fm.main(conf)
 
-        # Compute accuracy metrics
+        # Plot feature matching
+        if conf.plot_fm:
+            fm.plot(conf)
 
+        # Compute accuracy metrics
+        accuracy.main(conf)
 
         # apply stabilization transform
-
 
 
     except Exception as e:  # noqa: BLE001

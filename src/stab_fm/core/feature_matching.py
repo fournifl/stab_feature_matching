@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from bokeh.plotting import figure, save, output_file
-from bokeh.models import Range1d, ColumnDataSource
+from bokeh.models import Range1d
 from bokeh.layouts import row
 
 from stab_fm.core import img
@@ -68,11 +68,12 @@ def save_h(H, outdir, stem):
     return
 
 
-def plot_src_and_dst_matches_mpl(src_pts, dst_pts, inlier_mask, im_ref, im, outdir_matches_plots, name):
+def plot_src_and_dst_matches_mpl(src_pts, dst_pts, inlier_mask, im_ref, im, outdir_matches_plots, stem):
     dst_pts = np.squeeze(dst_pts)
     src_pts = np.squeeze(src_pts)
     inlier_mask = np.squeeze(inlier_mask)
-    inlier_inds = np.where(inlier_mask == 1)
+    # inlier_inds = np.where(inlier_mask == 1)
+    inlier_inds = np.where(inlier_mask)
     fig, ax = plt.subplots(1, 2, figsize=(22, 12), sharex=True, sharey=True, tight_layout=True)
     ax[0].imshow(im_ref)
     ax[1].imshow(im)
@@ -85,7 +86,7 @@ def plot_src_and_dst_matches_mpl(src_pts, dst_pts, inlier_mask, im_ref, im, outd
     ax[1].plot(src_pts[inlier_inds, 0], src_pts[inlier_inds, 1], c='b', linewidth=0, markersize=6, marker='d')
     [ax[1].text(xi, yi, label, fontsize=10, ha='center', va='bottom') for xi, yi, label in zip(
         np.squeeze(src_pts[inlier_inds, 0]), np.squeeze(src_pts[inlier_inds, 1]), labels)]
-    fig.savefig(outdir_matches_plots / name)
+    fig.savefig(outdir_matches_plots / (stem + '.jpg'))
 
 
 def plot_src_and_dst_matches(src_pts, dst_pts, inlier_mask, im_ref, im, outdir_matches_plots, name, h, w):
@@ -97,7 +98,8 @@ def plot_src_and_dst_matches(src_pts, dst_pts, inlier_mask, im_ref, im, outdir_m
     dst_pts = np.squeeze(dst_pts)
     src_pts = np.squeeze(src_pts)
     inlier_mask = np.squeeze(inlier_mask)
-    inlier_inds = np.where(inlier_mask == 1)
+    # inlier_inds = np.where(inlier_mask == 1)
+    inlier_inds = np.where(inlier_mask)
 
     # Bokeh  expects image origin at bottom-left, so flip vertically
     im_ref = np.flipud(im_ref)
@@ -142,7 +144,7 @@ def plot_src_and_dst_matches(src_pts, dst_pts, inlier_mask, im_ref, im, outdir_m
     save(layout)
 
 
-def run(ref_fn, ref_f_rois, target_imgs_dir, f_calib, type_matching, paths, ecc=False):
+def run(ref_fn, ref_f_rois, target_imgs_dir, f_calib, type_matching, paths):
 
     # read reference image
     im_ref, im_ref_gray, h, w = img.read(ref_fn, f_calib)
@@ -169,20 +171,6 @@ def run(ref_fn, ref_f_rois, target_imgs_dir, f_calib, type_matching, paths, ecc=
     sz_dil = 800
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (sz_dil, sz_dil))
     masks_target = [cv2.dilate(masks[i], kernel, iterations=1) for i in range(len(masks))]
-
-    # outdirs
-    paths = paths.create_all()
-    # outdir = outdir / type_matching
-    # outdir_matches = outdir /  'matches'
-    # outdir_matches.mkdir(parents=True, exist_ok=True)
-    # outdir_matches_plots = outdir_matches / 'plots'
-    # outdir_matches_plots.mkdir(parents=True, exist_ok=True)
-    # outdir_matches_data = outdir_matches / 'data'
-    # outdir_matches_data.mkdir(parents=True, exist_ok=True)
-    # outdir_h = outdir /  'H'
-    # outdir_h.mkdir(parents=True, exist_ok=True)
-    # outdir_warped = outdir / 'warped'
-    # outdir_warped.mkdir(parents=True, exist_ok=True)
 
     # loop through target images
     ls = sorted(target_imgs_dir.glob('*.jp*g'))
@@ -215,12 +203,11 @@ def run(ref_fn, ref_f_rois, target_imgs_dir, f_calib, type_matching, paths, ecc=
         # compute homography and inliers
         H, inlier_mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5)
 
-        # plot matches (with matplotlib, and bokeh)
-        plot_src_and_dst_matches_mpl(src_pts, dst_pts, inlier_mask, im_ref, im, paths.matches_plot, f.name)
-        plot_src_and_dst_matches(src_pts, dst_pts, inlier_mask, im_ref, im, paths.matches_plot, f.stem, h, w)
-
         # save matches
         save_matches(src_pts, dst_pts, inlier_mask, paths.matches_data, f.stem)
+
+        # save homography
+        save_h(H, paths.h, f.stem)
 
         # save homography
         save_h(H, paths.h, f.stem)
@@ -257,5 +244,32 @@ def run(ref_fn, ref_f_rois, target_imgs_dir, f_calib, type_matching, paths, ecc=
     return
 
 
+def plot(fp_ref_im, target_imgs_dir, dir_matches_data, dir_matches_plot):
+
+    # list of csv matching points data files
+    ls = sorted(dir_matches_data.glob('*.csv'))
+
+    # read ref im
+    im_ref = cv2.cvtColor(cv2.imread(fp_ref_im), cv2.COLOR_BGR2RGB)
+    h, w = im_ref.shape[0:2]
+
+    for f_match in ls:
+
+        # read csv
+        df = pd.read_csv(f_match)
+        inlier_mask = df['valid']
+
+        # extract src and dst points
+        src_pts = df[['src_x', 'src_y']].to_numpy()
+        dst_pts = df[['dst_x', 'dst_y']].to_numpy()
+
+        # target im
+        im = cv2.cvtColor(cv2.imread(target_imgs_dir / (f_match.stem + '.jpg')), cv2.COLOR_BGR2RGB)
+
+        # plot matches (with matplotlib, and bokeh)
+        plot_src_and_dst_matches_mpl(src_pts, dst_pts, inlier_mask, im_ref, im, dir_matches_plot, f_match.stem)
+        plot_src_and_dst_matches(src_pts, dst_pts, inlier_mask, im_ref, im, dir_matches_plot, f_match.stem, h, w)
+
+    return
 
 

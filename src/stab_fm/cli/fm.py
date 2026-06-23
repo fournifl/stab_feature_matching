@@ -11,3 +11,12 @@ def main(conf):
         conf.matching,
         Paths(conf.outdir, conf.matching)
     )
+
+
+def plot(conf):
+
+    paths = Paths(conf.outdir, conf.matching)
+    feature_matching.plot(conf.ref_img.fname,
+                          conf.target_imgs.dir,
+                          paths.matches_data,
+                          paths.matches_plot)
