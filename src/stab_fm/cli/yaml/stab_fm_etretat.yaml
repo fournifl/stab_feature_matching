@@ -2,6 +2,7 @@ ref_img:
   fname: '/home/florent/Projects/Etretat/Etretat_central2/images/raw/A_Etretat_central2_2fps_600s_20251015_15_00.jpg'
   f_rois_fm: '/home/florent/Projects/Etretat/Etretat_central2/test_stab_fm/A_Etretat_central2_2fps_600s_20251015_15_00_rois.json'
   f_rois_edges: '/home/florent/Projects/Etretat/Etretat_central2/test_stab_fm/A_Etretat_central2_2fps_600s_20251015_15_00_rois_edges.json'
+  f_gcps: '/home/florent/Projects/Etretat/Geodesie/GCPS_2025/fichiers_correspondance_coordonnees_relles_vs_pixels/CAM44/gcps_CAM44.csv'
 target_imgs:
   dir: '/home/florent/Projects/Etretat/Etretat_central2/test_stab_fm/target_imgs'
 f_calib: '/home/florent/Projects/Etretat/Etretat_central2/info/calibration/calib_CAM44.json'
