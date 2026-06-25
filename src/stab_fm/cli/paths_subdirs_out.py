@@ -21,12 +21,14 @@ class Paths:
         self.matches_plot = self.matches / "plots"
         self.matches_data = self.matches / "data"
         self.acc_metrics = self.outdir / "acc_metrics"
+        self.cam_mvts = self.outdir / "cam_mvts"
         self.h = self.outdir / "H"
         self.warped = self.outdir / "warped"
         self.create_all()
 
     def create_all(self):
         """Create all directories"""
-        for path in [self.matches, self.matches_plot, self.matches_data, self.acc_metrics, self.h, self.warped]:
+        for path in [self.matches, self.matches_plot, self.matches_data, self.acc_metrics, self.h, self.warped,
+                     self.cam_mvts]:
             path.mkdir(parents=True, exist_ok=True)
         return self
