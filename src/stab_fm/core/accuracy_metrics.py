@@ -152,9 +152,11 @@ def compute_error_metrics(
         psnr.append(cv2.PSNR(im_ref, warped_im))
 
         # Structural Similarity Index
+        # tester des methodes plus robustes (voir partie "Deep Learning-Based Approaches"):
+        # https://medium.com/scrapehero/exploring-image-similarity-approaches-in-python-b8ca0a3ed5a3
+
         try:
-            # ssim_score, diff = ssim(im_ref_gray, im_gray, full=True, data_range=255)
-            ssim_score, diff = ssim(e1, e2, full=True, data_range=255)
+            ssim_score, diff = ssim(im_ref_gray, im_gray, full=True, data_range=255)
             ssim_score = np.mean(diff[mask_ref==1])
             ssi.append(ssim_score)
         except:
